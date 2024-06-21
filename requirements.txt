@@ -1,5 +1,7 @@
-Flask
+# Flask
 whisper-cpp-python
 edge-tts
 asyncio
-gunicorn
+# gunicorn
+uvicorn
+fastapi
