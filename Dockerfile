@@ -24,6 +24,7 @@ ENV UVICORN_APP=main:app
 ENV UVICORN_HOST=0.0.0.0
 ENV UVICORN_PORT=8000
 ENV UVICORN_LOG_LEVEL=info
+ENV REPLICATE_API_TOKEN=""
 
 # Download the Whisper model file if it doesn't exist
 RUN if [ ! -f ggml-model-whisper-tiny.bin ]; then wget https://ggml.ggerganov.com/ggml-model-whisper-tiny.bin; fi

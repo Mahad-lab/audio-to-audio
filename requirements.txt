@@ -6,3 +6,5 @@ asyncio
 uvicorn
 fastapi
 numpy==1.26.4
+replicate==0.26.1
+python-dotenv
