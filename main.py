@@ -1,3 +1,6 @@
+from dotenv import load_dotenv
+load_dotenv()
+
 import shutil
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.responses import FileResponse
@@ -8,6 +11,12 @@ from whisper_cpp_python import Whisper
 from whisper_cpp_python.whisper_cpp import whisper_progress_callback
 import random
 import string
+import os
+import requests
+
+import replicate
+
+print(os.environ.get('REPLICATE_API_TOKEN'))
 
 app = FastAPI()
 
@@ -44,6 +53,9 @@ print("Model loaded successfully.")
 UPLOAD_FOLDER = 'uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
+DOWNLOAD_FOLDER = 'downloads'
+os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
+
 def generate_unique_filename():
     """Generates a unique random string of 10 characters."""
     return ''.join(random.choices(string.ascii_letters + string.digits, k=10))
@@ -65,8 +77,53 @@ async def convert_to_speech(text, filename, voice=0):
     print("Task complete")
     return OUTPUT_FILE
 
+
+def save_file_from_url(url, filename):
+    try:
+        response = requests.get(url)
+        response.raise_for_status()  # Raise an exception if the request was not successful
+        with open(filename, "wb") as buffer:
+            buffer.write(response.content)
+        print(f"File saved as {filename}")
+        return filename
+    except requests.exceptions.RequestException as e:
+        print(f"Failed to download the file: {e}")
+        return None
+
+def replicate_convert_to_speech(text):
+    try:
+        output = replicate.run(
+            "suno-ai/bark:b76242b40d67c76ab6742e987628a2a9ac019e11d56ab96c4e91ce03b79b2787",
+            input={
+                "prompt": text,
+                "text_temp": 0.7,
+                "output_full": False,
+                "waveform_temp": 0.7,
+                "history_prompt": "announcer"
+            }
+        )
+        # print(output)
+        print("Output: ", output)
+        return output
+    except Exception as e:
+        print(f"Failed to convert text to speech: {e}")
+        return None
+
 @app.post("/upload/")
 async def upload_file(file: UploadFile = File(...)):
+    """
+    Uploads a file and converts the text to speech.
+    
+    Parameters:
+    - file: The audio file to be uploaded.
+
+    Returns:
+    - The audio file in mp3 format.
+    
+    Note : 
+    - Please wait for the file to be uploaded and processed.
+    
+    """
     if not file.filename:
         raise HTTPException(status_code=400, detail="No selected file")
     
@@ -80,11 +137,23 @@ async def upload_file(file: UploadFile = File(...)):
     print("Text: ", text)
 
     unique_filename = generate_unique_filename()
-    output_filename = os.path.join(UPLOAD_FOLDER, f"{unique_filename}.mp3")
+    output_filename = os.path.join(DOWNLOAD_FOLDER, f"{unique_filename}.mp3")
     
-    await convert_to_speech(text, output_filename)
+    # await convert_to_speech(text, output_filename)
+    output = replicate_convert_to_speech(text)
     
-    return FileResponse(output_filename, media_type="audio/mpeg", filename=f"{unique_filename}.mp3")
+    output_url = output.get('audio_out')
+
+    if output_url:
+        local_file = save_file_from_url(output_url, output_filename)
+        if local_file:
+            return FileResponse(output_filename, media_type="audio/mpeg", filename=f"{unique_filename}.mp3")
+        else:
+            return {"message": "Failed to save the file"}
+    else:
+        return {"message": "Failed to convert text to speech"}
+    
+    # return FileResponse(output_filename, media_type="audio/mpeg", filename=f"{unique_filename}.mp3")
 
 @app.get("/")
 async def home():
